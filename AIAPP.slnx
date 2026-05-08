@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/AIAPP.AiPrivacy/AIAPP.AiPrivacy.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/AIAPP.AiPrivacy.Tests/AIAPP.AiPrivacy.Tests.csproj" />
+  </Folder>
+</Solution>
