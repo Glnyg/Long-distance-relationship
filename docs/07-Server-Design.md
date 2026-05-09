@@ -282,3 +282,15 @@ app.MapHealthChecks("/healthz");
 - 授权相关测试必须覆盖双方授权、单方撤回、解绑后访问失败。
 - AI 测试必须覆盖输入不落库、审计不含隐私原文、模型失败降级。
 - 可观测性测试必须覆盖敏感日志门禁、OpenTelemetry 接入门禁和 `correlation_id` 传递。
+
+## P0 后端基础接口
+
+P0 先落地三个服务，接口路径保持稳定：
+
+- `IdentityService`：`POST /auth/sms/send-code`、`POST /auth/sms/login`、`POST /auth/wechat/login`、`POST /auth/token/refresh`、`POST /auth/logout`、`GET /auth/me`。
+- `CoupleService`：`POST /couples/invitations`、`POST /couples/invitations/{code}/accept`、`GET /couples/current`、`POST /couples/current/unbind`。
+- `ConsentService`：`GET /consents/current`、`PUT /consents/{dataType}`、`DELETE /consents/{dataType}`。
+
+错误响应统一使用 `ProblemDetails`，扩展字段为 `error_code`、中文 `message` 和 `correlation_id`。路由层必须保持薄，只负责参数绑定、鉴权、调用 MediatR 命令或查询、返回结果。领域规则放在聚合根或领域服务里，应用层用命令和查询串联仓储、审计和时间。
+
+P0 不接真实短信、微信或云厂商 Secret。短信和微信只定义适配接口，开发和测试使用替身实现。所有真实 Secret 只能由部署环境注入，仓库示例只能使用 `CHANGE_ME`。

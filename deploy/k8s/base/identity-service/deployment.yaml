@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aiapp-identity-service
+  namespace: aiapp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: aiapp-identity-service
+  template:
+    metadata:
+      labels:
+        app: aiapp-identity-service
+    spec:
+      serviceAccountName: aiapp
+      containers:
+        - name: identity-service
+          image: CHANGE_ME/aiapp-identity-service:CHANGE_ME
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+          envFrom:
+            - secretRef:
+                name: aiapp-identity-service-secret
+          env:
+            # OTLP endpoint 指向集群内 OpenTelemetry Collector，只导出脱敏后的日志、Trace、Metric。
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://otel-collector:4317"
+            - name: ASPNETCORE_URLS
+              value: "http://+:8080"
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            # P0 默认资源限制，生产上线前需要结合压测调整。
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi

@@ -402,3 +402,15 @@ AI 数据流：
 ## 运行时现状
 
 当前已实现 .NET 10 类库 `src/AIAPP.AiPrivacy`，用于承载 AI 隐私网关核心规则。后续 ASP.NET Core 服务可以通过 Minimal APIs 暴露接口，但路由层必须保持很薄，业务规则继续留在核心库。
+
+## P0 后端基础落地
+
+P0 后端基础采用三个 ASP.NET Core Minimal API 服务：
+
+- `IdentityService`：负责手机号验证码登录、微信登录适配接口、JWT access token、refresh token 哈希保存、手机号加密和哈希。
+- `CoupleService`：负责长邀请码、二维码 payload、接受邀请、解绑和当前情侣关系查询。
+- `ConsentService`：负责授权查询、开启授权、撤回授权和授权版本记录。
+
+三个服务按 DDD、CQRS 和充血模型组织。PostgreSQL 首版使用单库分 schema：`identity`、`couple`、`consent`。这样能让初学者本地部署更简单，同时避免不同服务直接读写彼此表。后续如果拆成独立数据库，必须先写 ADR 和迁移方案。
+
+所有服务必须接入 `AIAPP.Observability`、`correlation_id` 和 `/healthz`。敏感写操作采用本地审计表记录元数据，不记录手机号、验证码、token、聊天原文、精确定位、Wi-Fi 名称、prompt 或模型输入快照。

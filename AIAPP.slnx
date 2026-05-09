@@ -1,10 +1,18 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/AIAPP.AiPrivacy/AIAPP.AiPrivacy.csproj" />
+    <Project Path="src/AIAPP.Backend.Shared/AIAPP.Backend.Shared.csproj" />
+    <Project Path="src/AIAPP.ConsentService/AIAPP.ConsentService.csproj" />
+    <Project Path="src/AIAPP.CoupleService/AIAPP.CoupleService.csproj" />
+    <Project Path="src/AIAPP.IdentityService/AIAPP.IdentityService.csproj" />
     <Project Path="src/AIAPP.Observability/AIAPP.Observability.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/AIAPP.AiPrivacy.Tests/AIAPP.AiPrivacy.Tests.csproj" />
+    <Project Path="tests/AIAPP.Backend.Shared.Tests/AIAPP.Backend.Shared.Tests.csproj" />
+    <Project Path="tests/AIAPP.ConsentService.Tests/AIAPP.ConsentService.Tests.csproj" />
+    <Project Path="tests/AIAPP.CoupleService.Tests/AIAPP.CoupleService.Tests.csproj" />
+    <Project Path="tests/AIAPP.IdentityService.Tests/AIAPP.IdentityService.Tests.csproj" />
     <Project Path="tests/AIAPP.Observability.Tests/AIAPP.Observability.Tests.csproj" />
   </Folder>
 </Solution>

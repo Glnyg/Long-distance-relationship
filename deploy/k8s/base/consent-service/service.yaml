@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: aiapp-consent-service
+  namespace: aiapp
+spec:
+  selector:
+    app: aiapp-consent-service
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

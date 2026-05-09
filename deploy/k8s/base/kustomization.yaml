@@ -11,3 +11,6 @@ resources:
   - rabbitmq/
   - minio/
   - observability/
+  - identity-service/
+  - couple-service/
+  - consent-service/
