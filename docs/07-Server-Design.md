@@ -74,6 +74,18 @@ last_changed: 2026-05-09
 - 保存敏感操作审计。
 - 支持后台查询和风控排查。
 
+`Observability`：
+
+- 不是业务服务，而是服务端共享基础能力。
+- 统一结构化日志、OpenTelemetry Trace、OpenTelemetry Metric、`correlation_id` 和健康检查。
+- 帮助排查登录、绑定、定位、聊天、AI、推送等全链路问题。
+
+`PlatformDeployment`：
+
+- 不是业务服务，而是部署基础设施。
+- 通过 Kubernetes 管理 PostgreSQL、Redis、RabbitMQ、MinIO 和可观测性组件。
+- 通过 GitHub Actions 执行 CI/CD。
+
 ## 服务关系解释
 
 初学者可以这样理解：
@@ -135,6 +147,34 @@ last_changed: 2026-05-09
 - Redis：会话、在线状态、限流、短期缓存。
 - S3 兼容对象存储：图片、语音消息、头像等对象。
 
+## 部署配置
+
+服务端部署配置位于 `deploy/k8s/`。
+
+首版包含：
+
+- PostgreSQL + PostGIS。
+- Redis。
+- RabbitMQ。
+- MinIO。
+- OpenTelemetry Collector。
+- Prometheus。
+- Grafana。
+- Loki。
+- Tempo。
+- Alertmanager。
+
+后续每个 ASP.NET Core 服务实现后，必须补充：
+
+- `Deployment`。
+- `Service`。
+- 健康检查。
+- 资源请求和限制。
+- 环境变量和 Secret 引用。
+- OpenTelemetry OTLP endpoint。
+
+部署变更必须通过 `scripts/Assert-DeploymentGate.ps1`。
+
 ## API 风格
 
 移动端 API 使用 HTTPS JSON。
@@ -165,6 +205,68 @@ last_changed: 2026-05-09
 - 所有模型调用必须通过 AI 隐私网关。
 - 不在日志中打印聊天原文、定位明细、Wi-Fi 名称、token、验证码。
 
+## 全链路日志、可观测性和预警
+
+服务端所有 ASP.NET Core 服务必须接入 `AIAPP.Observability`。
+
+每个服务启动时必须配置：
+
+```csharp
+builder.Services.AddAiAppObservability(options =>
+{
+    options.ServiceName = "AIAPP.ExampleService";
+});
+```
+
+每个服务必须启用：
+
+```csharp
+app.UseAiAppCorrelationId();
+app.MapHealthChecks("/healthz");
+```
+
+每个关键操作必须能通过 `correlation_id` 串起来。一次 AI 分析至少要覆盖：
+
+- 授权校验。
+- 最小必要数据拉取。
+- 模型调用。
+- 结果保存。
+- 审计记录。
+
+日志和 Trace 允许记录：
+
+- 服务名。
+- 操作名。
+- 错误码。
+- 耗时。
+- 数据类型。
+- 授权版本。
+- 模型 ID。
+- 哈希后的用户 ID 和情侣 ID。
+
+日志和 Trace 禁止记录：
+
+- 聊天原文。
+- 精确定位点。
+- Wi-Fi 名称。
+- 用机明细。
+- 手机号。
+- 验证码。
+- token。
+- prompt。
+- 模型输入快照。
+
+预警首版重点关注：
+
+- API 5xx 错误率。
+- API p95 延迟。
+- AI 模型超时率。
+- AI 审计写入失败。
+- 位置上传成功率下降。
+- 设备状态上传成功率下降。
+- 推送失败率升高。
+- 数据库或消息队列异常。
+
 ## 接口设计原则
 
 - 移动端接口用 JSON，方便 Android 调用。
@@ -179,3 +281,4 @@ last_changed: 2026-05-09
 - 集成测试使用 Testcontainers。
 - 授权相关测试必须覆盖双方授权、单方撤回、解绑后访问失败。
 - AI 测试必须覆盖输入不落库、审计不含隐私原文、模型失败降级。
+- 可观测性测试必须覆盖敏感日志门禁、OpenTelemetry 接入门禁和 `correlation_id` 传递。

@@ -19,6 +19,7 @@ related_adr:
 - 服务端边界清楚，便于微服务拆分和后续扩展。
 - AI 可处理隐私数据，但必须通过专门的隐私网关。
 - 文档是唯一事实源，代码必须服从设计文档和功能文档。
+- 工程规范体系约束后续代码生成、全链路日志、可观测性和预警。
 
 ## 总体分层
 
@@ -40,6 +41,13 @@ flowchart TD
     G --> O[(PostgreSQL + PostGIS/TimescaleDB)]
     I --> P[(PostgreSQL + 对象存储)]
     K --> Q[厂商推送]
+    B --> R[OpenTelemetry Collector]
+    R --> S[Prometheus/Grafana/Loki/Tempo/Alertmanager]
+    T[GitHub Actions CI/CD] --> U[Kubernetes 集群]
+    U --> N
+    U --> V[(Redis)]
+    U --> W[(RabbitMQ)]
+    U --> X[(MinIO 对象存储)]
 ```
 
 ## 8 条业务主线
@@ -308,6 +316,49 @@ Android 客户端不得：
 - AI 隐私网关服务：所有涉及隐私数据的 AI 调用唯一入口。
 - 通知网关服务：OPPO 及后续厂商推送适配。
 - 审计后台服务：权限、AI、解绑、删除等敏感操作审计。
+
+## 工程规范体系与可观测性
+
+工程规范体系负责约束后续代码生成和质量门禁。
+
+它包含：
+
+- 中文工程规范文档。
+- 功能、接口、AI 代码生成、可观测性模板。
+- 文档门禁、隐私日志门禁、可观测性门禁、项目总门禁脚本。
+- `AIAPP.Observability` 共享类库。
+
+服务端全链路日志和可观测性统一使用 OpenTelemetry。每次关键操作都要能通过 `correlation_id` 串起 Android 客户端、API、数据库、消息队列、AI 模型和推送供应商。
+
+默认观测组合：
+
+- Prometheus：指标。
+- Grafana：看板。
+- Loki：日志。
+- Tempo：链路追踪。
+- Alertmanager：预警。
+
+日志、Trace、Metric 和 Alert 只能使用排障元数据，不能包含聊天原文、完整经纬度、Wi-Fi 名称、手机号、验证码、token、prompt 或模型输入快照。
+
+## 部署架构
+
+首版部署采用 Kubernetes + kustomize。
+
+部署配置位于 `deploy/k8s/`：
+
+- PostgreSQL + PostGIS：核心业务数据和空间数据。
+- Redis：会话、在线状态、限流、短期缓存。
+- RabbitMQ：服务间事件。
+- MinIO：S3 兼容对象存储。
+- OpenTelemetry Collector：统一接收可观测性数据。
+- Prometheus、Grafana、Loki、Tempo、Alertmanager：指标、看板、日志、链路追踪和预警。
+
+CI/CD 使用 GitHub Actions：
+
+- CI 负责运行项目总门禁。
+- CD 采用手动触发，执行 `kubectl apply -k deploy/k8s/base`。
+
+生产环境可以替换为云厂商托管 PostgreSQL、Redis、对象存储，但业务代码不能绑定具体云厂商。
 
 ## AI 隐私网关
 

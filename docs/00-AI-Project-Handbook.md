@@ -23,8 +23,16 @@ related_adr:
 - [[07-Server-Design]]
 - [[08-Launch-And-Compliance]]
 - [[09-Beginner-Guide]]
+- [[engineering-standards/代码生成总规则]]
+- [[engineering-standards/服务端工程规范]]
+- [[engineering-standards/Android工程规范]]
+- [[engineering-standards/AI隐私工程规范]]
+- [[engineering-standards/可观测性与预警规范]]
+- [[engineering-standards/部署与CICD规范]]
 - [[features/ai-privacy-analysis]]
 - [[adr/0001-ai-privacy-gateway]]
+- [[adr/0002-engineering-standards-observability]]
+- [[adr/0003-kubernetes-cicd-platform]]
 
 ## 语言规则
 
@@ -52,6 +60,41 @@ related_adr:
 5. [[02-Architecture]]：理解客户端、服务端、数据库、AI、第三方服务怎样协作。
 6. [[04-Tech-Selection]]：理解为什么选这些技术，为什么暂时不用某些技术。
 7. 具体功能文档：改哪个功能就读 `docs/features/` 下对应文件。
+8. [[engineering-standards/代码生成总规则]]：写代码前理解工程规范体系。
+
+## 工程规范体系
+
+本项目把后续代码生成、文档同步、质量门禁、全链路日志、可观测性和预警统一纳入工程规范体系。
+
+工程规范体系不是单个脚本，也不是外部插件。它由中文规范文档、模板、门禁脚本和共享类库组成。
+
+后续 AI 或工程师生成代码前必须确认：
+
+- 是否已阅读对应功能文档。
+- 是否已更新设计文档、功能文档、隐私文档、ADR 和变更记录。
+- 是否需要接入结构化日志、OpenTelemetry Trace、OpenTelemetry Metric 和 Alert 预警。
+- 是否需要新增 Kubernetes 部署配置、CI/CD 配置或基础组件配置。
+- 是否确认日志、Trace、Metric 不包含聊天原文、完整经纬度、Wi-Fi 名称、手机号、验证码、token、prompt 或模型输入快照。
+
+## 部署规则
+
+项目部署配置位于 `deploy/k8s/`，CI/CD 配置位于 `.github/workflows/`。
+
+首版基础设施包含：
+
+- Kubernetes。
+- PostgreSQL + PostGIS。
+- Redis。
+- RabbitMQ。
+- MinIO。
+- OpenTelemetry Collector。
+- Prometheus。
+- Grafana。
+- Loki。
+- Tempo。
+- Alertmanager。
+
+真实 Secret 不允许提交到 Git。仓库内只能保存 `CHANGE_ME` 占位示例。
 
 ## AI 技术边界
 
@@ -106,4 +149,10 @@ related_adr:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/Assert-DocsGate.ps1
+```
+
+项目总门禁命令：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/Assert-ProjectGate.ps1
 ```

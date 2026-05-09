@@ -23,3 +23,31 @@ powershell -ExecutionPolicy Bypass -File scripts/Assert-DocsGate.ps1
 ```
 
 修改任何产品行为前，必须先阅读 `docs/00-AI-Project-Handbook.md`。如果你是初学者，先读 `docs/09-Beginner-Guide.md`。项目文档是唯一事实源，代码必须服从文档。
+
+## 工程规范体系
+
+后续 AI/人工代码生成统一遵守 `docs/engineering-standards/`。项目要求完整的全链路日志、可观测性和预警，服务端默认使用 OpenTelemetry，排障通过 `correlation_id` 串起链路。
+
+一键门禁：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/Assert-ProjectGate.ps1
+```
+
+## 部署
+
+Kubernetes 部署配置在 `deploy/k8s/`，CI/CD 配置在 `.github/workflows/`。
+
+当前基础设施包含 PostgreSQL + PostGIS、Redis、RabbitMQ、MinIO、OpenTelemetry Collector、Prometheus、Grafana、Loki、Tempo、Alertmanager。
+
+本地只检查清单和门禁：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/Assert-DeploymentGate.ps1
+```
+
+有 `kubectl` 时可额外验证：
+
+```powershell
+kubectl kustomize deploy/k8s/base
+```

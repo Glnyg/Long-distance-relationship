@@ -1,0 +1,132 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: aiapp-prometheus-config
+  namespace: aiapp
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/part-of: aiapp
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+
+    rule_files:
+      - /etc/prometheus/rules/aiapp-alerts.yml
+
+    alerting:
+      alertmanagers:
+        - static_configs:
+            - targets:
+                - aiapp-alertmanager:9093
+
+    scrape_configs:
+      - job_name: prometheus
+        static_configs:
+          - targets:
+              - localhost:9090
+      - job_name: otel-collector
+        static_configs:
+          - targets:
+              - aiapp-otel-collector:9464
+  aiapp-alerts.yml: |
+    groups:
+      - name: aiapp-platform
+        rules:
+          - alert: AiAppTargetDown
+            expr: up == 0
+            for: 2m
+            labels:
+              severity: warning
+            annotations:
+              summary: AIAPP 有采集目标不可用
+              description: 请先查看 Prometheus targets 和对应 Pod 状态。
+          - alert: AiAppApiHighErrorRate
+            expr: sum(rate(http_server_request_duration_seconds_count{http_response_status_code=~"5.."}[5m])) > 0
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: AIAPP API 5xx 错误升高
+              description: 请按 correlation_id 查看服务日志和 Tempo Trace。
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: aiapp-prometheus
+  namespace: aiapp
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/part-of: aiapp
+spec:
+  ports:
+    - name: http
+      port: 9090
+      targetPort: http
+  selector:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/part-of: aiapp
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aiapp-prometheus
+  namespace: aiapp
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/part-of: aiapp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: prometheus
+      app.kubernetes.io/part-of: aiapp
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: prometheus
+        app.kubernetes.io/part-of: aiapp
+    spec:
+      serviceAccountName: aiapp-workload
+      containers:
+        - name: prometheus
+          image: prom/prometheus:v3.3.0
+          imagePullPolicy: IfNotPresent
+          args:
+            - --config.file=/etc/prometheus/prometheus.yml
+            - --storage.tsdb.path=/prometheus
+            - --web.enable-lifecycle
+          ports:
+            - name: http
+              containerPort: 9090
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /-/healthy
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/prometheus
+            - name: data
+              mountPath: /prometheus
+      volumes:
+        - name: config
+          configMap:
+            name: aiapp-prometheus-config
+        - name: data
+          emptyDir: {}

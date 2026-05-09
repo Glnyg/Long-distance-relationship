@@ -1,14 +1,18 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
+using AIAPP.Observability;
 using Microsoft.Extensions.AI;
 
 namespace AIAPP.AiPrivacy;
 
 public sealed class AiPrivacyGateway
 {
+    private static readonly ActivitySource ActivitySource = new(AiAppTelemetryNames.ActivitySources.AiPrivacy);
+
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
         Converters = { new JsonStringEnumConverter() }
@@ -42,28 +46,48 @@ public sealed class AiPrivacyGateway
 
     public async Task<AiAnalysisOutcome> AnalyzeAsync(AiAnalysisRequest request, CancellationToken cancellationToken = default)
     {
+        using var analysisActivity = StartActivity("ai_privacy.analyze");
         var now = _timeProvider.GetUtcNow();
         var toUtc = request.ToUtc ?? now;
         var fromUtc = request.FromUtc ?? toUtc.Subtract(_options.DefaultLookback);
+        SetRequestTags(analysisActivity, request, fromUtc, toUtc);
 
         if (!IsValidRange(fromUtc, toUtc, request.DataTypes))
         {
+            MarkActivityFailure(analysisActivity, AiAnalysisFailureCode.InvalidTimeRange);
             return AiAnalysisOutcome.Failure(AiAnalysisFailureCode.InvalidTimeRange, "The AI analysis time range is invalid.");
         }
 
-        var binding = await _consentStore.GetActiveBindingAsync(request.CoupleId, cancellationToken).ConfigureAwait(false);
+        CoupleBinding? binding;
+        using (var bindingActivity = StartActivity("ai_privacy.load_binding"))
+        {
+            SetRequestTags(bindingActivity, request, fromUtc, toUtc);
+            binding = await _consentStore.GetActiveBindingAsync(request.CoupleId, cancellationToken).ConfigureAwait(false);
+            bindingActivity?.SetTag(AiAppTelemetryNames.Tags.Result, binding is null ? "missing" : "ok");
+        }
+
         if (binding is null)
         {
+            MarkActivityFailure(analysisActivity, AiAnalysisFailureCode.BindingInactive);
             return AiAnalysisOutcome.Failure(AiAnalysisFailureCode.BindingInactive, "The couple binding is not active.");
         }
 
         if (!binding.Contains(request.RequestedByUserId))
         {
+            MarkActivityFailure(analysisActivity, AiAnalysisFailureCode.RequesterNotInCouple);
             return AiAnalysisOutcome.Failure(AiAnalysisFailureCode.RequesterNotInCouple, "The requester is not part of the couple binding.");
         }
 
-        var consentA = await _consentStore.GetConsentAsync(request.CoupleId, binding.PartnerAUserId, cancellationToken).ConfigureAwait(false);
-        var consentB = await _consentStore.GetConsentAsync(request.CoupleId, binding.PartnerBUserId, cancellationToken).ConfigureAwait(false);
+        AiConsentGrant? consentA;
+        AiConsentGrant? consentB;
+        using (var consentActivity = StartActivity("ai_privacy.load_consents"))
+        {
+            SetRequestTags(consentActivity, request, fromUtc, toUtc);
+            consentA = await _consentStore.GetConsentAsync(request.CoupleId, binding.PartnerAUserId, cancellationToken).ConfigureAwait(false);
+            consentB = await _consentStore.GetConsentAsync(request.CoupleId, binding.PartnerBUserId, cancellationToken).ConfigureAwait(false);
+            consentActivity?.SetTag(AiAppTelemetryNames.Tags.Result, ConsentAllows(consentA, request.DataTypes) && ConsentAllows(consentB, request.DataTypes) ? "ok" : "missing");
+        }
+
         if (!ConsentAllows(consentA, request.DataTypes) || !ConsentAllows(consentB, request.DataTypes))
         {
             await RecordAuditAsync(
@@ -79,10 +103,18 @@ public sealed class AiPrivacyGateway
                 AiAnalysisFailureCode.ConsentMissing,
                 cancellationToken).ConfigureAwait(false);
 
+            MarkActivityFailure(analysisActivity, AiAnalysisFailureCode.ConsentMissing);
             return AiAnalysisOutcome.Failure(AiAnalysisFailureCode.ConsentMissing, "Both partners must separately consent to all requested AI data types.");
         }
 
-        var prompt = await BuildPromptAsync(binding, request, fromUtc, toUtc, cancellationToken).ConfigureAwait(false);
+        string prompt;
+        using (var promptActivity = StartActivity("ai_privacy.build_prompt"))
+        {
+            SetRequestTags(promptActivity, request, fromUtc, toUtc);
+            prompt = await BuildPromptAsync(binding, request, fromUtc, toUtc, cancellationToken).ConfigureAwait(false);
+            promptActivity?.SetTag(AiAppTelemetryNames.Tags.Result, "ok");
+        }
+
         var chatOptions = new ChatOptions
         {
             Temperature = _options.Temperature,
@@ -92,9 +124,14 @@ public sealed class AiPrivacyGateway
         };
 
         ChatResponse response;
+        using var modelActivity = StartActivity("ai_privacy.model_call", ActivityKind.Client);
+        SetRequestTags(modelActivity, request, fromUtc, toUtc);
+        modelActivity?.SetTag(AiAppTelemetryNames.Tags.ModelId, _options.ModelId);
         try
         {
             response = await GetResponseWithRetryAsync(prompt, chatOptions, cancellationToken).ConfigureAwait(false);
+            modelActivity?.SetTag(AiAppTelemetryNames.Tags.Result, "ok");
+            modelActivity?.SetTag(AiAppTelemetryNames.Tags.ModelId, response.ModelId ?? _options.ModelId);
         }
         catch (Exception) when (!cancellationToken.IsCancellationRequested)
         {
@@ -111,6 +148,8 @@ public sealed class AiPrivacyGateway
                 AiAnalysisFailureCode.ModelUnavailable,
                 cancellationToken).ConfigureAwait(false);
 
+            MarkActivityFailure(modelActivity, AiAnalysisFailureCode.ModelUnavailable);
+            MarkActivityFailure(analysisActivity, AiAnalysisFailureCode.ModelUnavailable);
             return AiAnalysisOutcome.Failure(AiAnalysisFailureCode.ModelUnavailable, "The AI model is temporarily unavailable.");
         }
 
@@ -130,6 +169,7 @@ public sealed class AiPrivacyGateway
                 AiAnalysisFailureCode.InvalidModelOutput,
                 cancellationToken).ConfigureAwait(false);
 
+            MarkActivityFailure(analysisActivity, AiAnalysisFailureCode.InvalidModelOutput);
             return AiAnalysisOutcome.Failure(AiAnalysisFailureCode.InvalidModelOutput, "The AI model returned an invalid response format.");
         }
 
@@ -148,6 +188,7 @@ public sealed class AiPrivacyGateway
                 AiAnalysisFailureCode.UnsafeModelOutput,
                 cancellationToken).ConfigureAwait(false);
 
+            MarkActivityFailure(analysisActivity, AiAnalysisFailureCode.UnsafeModelOutput);
             return AiAnalysisOutcome.Failure(AiAnalysisFailureCode.UnsafeModelOutput, "The AI model returned content that failed safety checks.");
         }
 
@@ -162,7 +203,14 @@ public sealed class AiPrivacyGateway
             now.Add(_options.ResultRetention),
             response.ModelId ?? _options.ModelId);
 
-        await _resultStore.SaveAsync(result, cancellationToken).ConfigureAwait(false);
+        using (var saveActivity = StartActivity("ai_privacy.save_result"))
+        {
+            SetRequestTags(saveActivity, request, fromUtc, toUtc);
+            saveActivity?.SetTag(AiAppTelemetryNames.Tags.ModelId, result.ModelId);
+            await _resultStore.SaveAsync(result, cancellationToken).ConfigureAwait(false);
+            saveActivity?.SetTag(AiAppTelemetryNames.Tags.Result, "ok");
+        }
+
         await RecordAuditAsync(
             binding,
             request,
@@ -176,12 +224,19 @@ public sealed class AiPrivacyGateway
             AiAnalysisFailureCode.None,
             cancellationToken).ConfigureAwait(false);
 
+        analysisActivity?.SetTag(AiAppTelemetryNames.Tags.ModelId, result.ModelId);
+        analysisActivity?.SetTag(AiAppTelemetryNames.Tags.Result, "ok");
+        analysisActivity?.SetStatus(ActivityStatusCode.Ok);
         return AiAnalysisOutcome.Success(result);
     }
 
-    public Task<int> DeleteExpiredResultsAsync(CancellationToken cancellationToken = default)
+    public async Task<int> DeleteExpiredResultsAsync(CancellationToken cancellationToken = default)
     {
-        return _resultStore.DeleteExpiredAsync(_timeProvider.GetUtcNow(), cancellationToken);
+        using var activity = StartActivity("ai_privacy.delete_expired_results");
+        var deleted = await _resultStore.DeleteExpiredAsync(_timeProvider.GetUtcNow(), cancellationToken).ConfigureAwait(false);
+        activity?.SetTag(AiAppTelemetryNames.Metrics.AiExpiredResultsDeleted, deleted);
+        activity?.SetTag(AiAppTelemetryNames.Tags.Result, "ok");
+        return deleted;
     }
 
     private bool IsValidRange(DateTimeOffset fromUtc, DateTimeOffset toUtc, AiPrivacyDataTypes dataTypes)
@@ -213,19 +268,40 @@ public sealed class AiPrivacyGateway
 
         if (request.DataTypes.HasFlag(AiPrivacyDataTypes.Chat))
         {
-            var messages = await _dataSource.GetChatMessagesAsync(request.CoupleId, fromUtc, toUtc, cancellationToken).ConfigureAwait(false);
+            IReadOnlyList<PrivateChatMessage> messages;
+            using (var dataActivity = StartActivity("ai_privacy.load_chat_context"))
+            {
+                SetRequestTags(dataActivity, request, fromUtc, toUtc);
+                messages = await _dataSource.GetChatMessagesAsync(request.CoupleId, fromUtc, toUtc, cancellationToken).ConfigureAwait(false);
+                dataActivity?.SetTag(AiAppTelemetryNames.Tags.Result, "ok");
+            }
+
             AppendChatSection(builder, binding, messages);
         }
 
         if (request.DataTypes.HasFlag(AiPrivacyDataTypes.Location))
         {
-            var points = await _dataSource.GetLocationPointsAsync(request.CoupleId, fromUtc, toUtc, cancellationToken).ConfigureAwait(false);
+            IReadOnlyList<PrivateLocationPoint> points;
+            using (var dataActivity = StartActivity("ai_privacy.load_location_context"))
+            {
+                SetRequestTags(dataActivity, request, fromUtc, toUtc);
+                points = await _dataSource.GetLocationPointsAsync(request.CoupleId, fromUtc, toUtc, cancellationToken).ConfigureAwait(false);
+                dataActivity?.SetTag(AiAppTelemetryNames.Tags.Result, "ok");
+            }
+
             AppendLocationSection(builder, points);
         }
 
         if (request.DataTypes.HasFlag(AiPrivacyDataTypes.DeviceState))
         {
-            var states = await _dataSource.GetDeviceStatesAsync(request.CoupleId, fromUtc, toUtc, cancellationToken).ConfigureAwait(false);
+            IReadOnlyList<PrivateDeviceState> states;
+            using (var dataActivity = StartActivity("ai_privacy.load_device_state_context"))
+            {
+                SetRequestTags(dataActivity, request, fromUtc, toUtc);
+                states = await _dataSource.GetDeviceStatesAsync(request.CoupleId, fromUtc, toUtc, cancellationToken).ConfigureAwait(false);
+                dataActivity?.SetTag(AiAppTelemetryNames.Tags.Result, "ok");
+            }
+
             AppendDeviceStateSection(builder, states);
         }
 
@@ -337,6 +413,12 @@ public sealed class AiPrivacyGateway
         AiAnalysisFailureCode failureCode,
         CancellationToken cancellationToken)
     {
+        using var auditActivity = StartActivity("ai_privacy.record_audit");
+        SetRequestTags(auditActivity, request, fromUtc, toUtc);
+        auditActivity?.SetTag(AiAppTelemetryNames.Tags.ModelId, response?.ModelId ?? _options.ModelId);
+        auditActivity?.SetTag(AiAppTelemetryNames.Tags.Result, succeeded ? "ok" : "failed");
+        auditActivity?.SetTag(AiAppTelemetryNames.Tags.ErrorCode, failureCode.ToString());
+
         var usage = response?.Usage;
         var entry = new AiAuditEntry(
             Guid.NewGuid(),
@@ -359,6 +441,33 @@ public sealed class AiPrivacyGateway
             failureCode);
 
         await _auditSink.RecordAsync(entry, cancellationToken).ConfigureAwait(false);
+        auditActivity?.SetStatus(ActivityStatusCode.Ok);
+    }
+
+    private static Activity? StartActivity(string operation, ActivityKind activityKind = ActivityKind.Internal)
+    {
+        var activity = ActivitySource.StartActivity(operation, activityKind);
+        activity?.SetTag(AiAppTelemetryNames.Tags.Operation, operation);
+        return activity;
+    }
+
+    private static void SetRequestTags(
+        Activity? activity,
+        AiAnalysisRequest request,
+        DateTimeOffset fromUtc,
+        DateTimeOffset toUtc)
+    {
+        activity?.SetTag(AiAppTelemetryNames.Tags.CoupleIdHash, TelemetrySanitizer.HashIdentifier(request.CoupleId));
+        activity?.SetTag(AiAppTelemetryNames.Tags.UserIdHash, TelemetrySanitizer.HashIdentifier(request.RequestedByUserId));
+        activity?.SetTag(AiAppTelemetryNames.Tags.DataType, request.DataTypes.ToString());
+        activity?.SetTag(AiAppTelemetryNames.Tags.TimeRangeDays, (toUtc - fromUtc).TotalDays);
+    }
+
+    private static void MarkActivityFailure(Activity? activity, AiAnalysisFailureCode failureCode)
+    {
+        activity?.SetTag(AiAppTelemetryNames.Tags.Result, "failed");
+        activity?.SetTag(AiAppTelemetryNames.Tags.ErrorCode, failureCode.ToString());
+        activity?.SetStatus(ActivityStatusCode.Error, failureCode.ToString());
     }
 
     private static string GetAlias(CoupleBinding binding, Guid userId)

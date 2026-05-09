@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: aiapp
+  labels:
+    app.kubernetes.io/name: aiapp
+    app.kubernetes.io/part-of: aiapp

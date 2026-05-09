@@ -1,0 +1,107 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: aiapp-grafana-secret
+  namespace: aiapp
+  labels:
+    app.kubernetes.io/name: grafana
+    app.kubernetes.io/part-of: aiapp
+type: Opaque
+stringData:
+  GF_SECURITY_ADMIN_USER: admin
+  GF_SECURITY_ADMIN_PASSWORD: CHANGE_ME_GRAFANA_PASSWORD
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: aiapp-grafana-datasources
+  namespace: aiapp
+  labels:
+    app.kubernetes.io/name: grafana
+    app.kubernetes.io/part-of: aiapp
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://aiapp-prometheus:9090
+        isDefault: true
+      - name: Tempo
+        type: tempo
+        access: proxy
+        url: http://aiapp-tempo:3200
+      - name: Loki
+        type: loki
+        access: proxy
+        url: http://aiapp-loki:3100
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: aiapp-grafana
+  namespace: aiapp
+  labels:
+    app.kubernetes.io/name: grafana
+    app.kubernetes.io/part-of: aiapp
+spec:
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http
+  selector:
+    app.kubernetes.io/name: grafana
+    app.kubernetes.io/part-of: aiapp
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aiapp-grafana
+  namespace: aiapp
+  labels:
+    app.kubernetes.io/name: grafana
+    app.kubernetes.io/part-of: aiapp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: grafana
+      app.kubernetes.io/part-of: aiapp
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: grafana
+        app.kubernetes.io/part-of: aiapp
+    spec:
+      serviceAccountName: aiapp-workload
+      containers:
+        - name: grafana
+          image: grafana/grafana:11.6.1
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 3000
+          envFrom:
+            - secretRef:
+                name: aiapp-grafana-secret
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          volumeMounts:
+            - name: datasources
+              mountPath: /etc/grafana/provisioning/datasources
+      volumes:
+        - name: datasources
+          configMap:
+            name: aiapp-grafana-datasources

@@ -1,8 +1,10 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/AIAPP.AiPrivacy/AIAPP.AiPrivacy.csproj" />
+    <Project Path="src/AIAPP.Observability/AIAPP.Observability.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/AIAPP.AiPrivacy.Tests/AIAPP.AiPrivacy.Tests.csproj" />
+    <Project Path="tests/AIAPP.Observability.Tests/AIAPP.Observability.Tests.csproj" />
   </Folder>
 </Solution>

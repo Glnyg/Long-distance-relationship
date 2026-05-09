@@ -1,0 +1,48 @@
+name: Deploy Kubernetes
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 部署环境名称
+        required: true
+        default: dev
+        type: choice
+        options:
+          - dev
+          - staging
+          - production
+      kustomize_path:
+        description: kustomize 目录
+        required: true
+        default: deploy/k8s/base
+        type: string
+
+jobs:
+  deploy:
+    name: Apply Kubernetes manifests
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Configure kubeconfig
+        shell: bash
+        run: |
+          mkdir -p "$HOME/.kube"
+          echo "${KUBE_CONFIG_B64}" | base64 -d > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+        env:
+          KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG_B64 }}
+
+      - name: Client dry-run
+        shell: bash
+        run: kubectl apply --dry-run=client -k "${{ inputs.kustomize_path }}"
+
+      - name: Deploy
+        shell: bash
+        run: kubectl apply -k "${{ inputs.kustomize_path }}"

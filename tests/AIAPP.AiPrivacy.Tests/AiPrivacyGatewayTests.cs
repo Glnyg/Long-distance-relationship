@@ -1,5 +1,7 @@
+using System.Diagnostics;
 using System.Text.Json;
 using AIAPP.AiPrivacy;
+using AIAPP.Observability;
 using Microsoft.Extensions.AI;
 
 namespace AIAPP.AiPrivacy.Tests;
@@ -138,6 +140,66 @@ public sealed class AiPrivacyGatewayTests
         Assert.DoesNotContain("31.2304", auditJson);
         Assert.DoesNotContain("121.4737", auditJson);
         Assert.DoesNotContain("HomeWiFiSecret", auditJson);
+    }
+
+    [Fact]
+    public async Task AnalyzeAsync_emits_privacy_safe_trace_metadata()
+    {
+        var activities = new List<Activity>();
+        using var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == AiAppTelemetryNames.ActivitySources.AiPrivacy,
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+            SampleUsingParentId = (ref ActivityCreationOptions<string> _) => ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStopped = activities.Add
+        };
+        ActivitySource.AddActivityListener(listener);
+
+        var dataSource = new RecordingPrivateDataSource
+        {
+            ChatMessages =
+            [
+                new PrivateChatMessage(UserA, Now.AddHours(-2), "private-chat-secret")
+            ],
+            LocationPoints =
+            [
+                new PrivateLocationPoint(UserA, Now.AddHours(-1), 31.2304, 121.4737, "ExactHome")
+            ],
+            DeviceStates =
+            [
+                new PrivateDeviceState(UserA, Now.AddHours(-1), 44, 80, false, "HomeWiFiSecret")
+            ]
+        };
+        var gateway = CreateGateway(CreateAllConsentStore(), dataSource, new RecordingChatClient(SafeJson()));
+
+        var outcome = await gateway.AnalyzeAsync(new AiAnalysisRequest(
+            CoupleId,
+            UserA,
+            AiPrivacyDataTypes.Chat | AiPrivacyDataTypes.Location | AiPrivacyDataTypes.DeviceState,
+            Now.AddDays(-1),
+            Now));
+
+        Assert.True(outcome.Succeeded);
+        var operationNames = activities.Select(activity => activity.OperationName).ToArray();
+        Assert.Contains("ai_privacy.load_binding", operationNames);
+        Assert.Contains("ai_privacy.load_consents", operationNames);
+        Assert.Contains("ai_privacy.build_prompt", operationNames);
+        Assert.Contains("ai_privacy.model_call", operationNames);
+        Assert.Contains("ai_privacy.save_result", operationNames);
+        Assert.Contains("ai_privacy.record_audit", operationNames);
+
+        var tagText = string.Join(
+            "|",
+            activities.SelectMany(activity => activity.Tags).Select(tag => $"{tag.Key}={tag.Value}"));
+
+        Assert.Contains(AiAppTelemetryNames.Tags.CoupleIdHash, tagText);
+        Assert.Contains(AiAppTelemetryNames.Tags.UserIdHash, tagText);
+        Assert.DoesNotContain(CoupleId.ToString(), tagText);
+        Assert.DoesNotContain(UserA.ToString(), tagText);
+        Assert.DoesNotContain("private-chat-secret", tagText);
+        Assert.DoesNotContain("31.2304", tagText);
+        Assert.DoesNotContain("121.4737", tagText);
+        Assert.DoesNotContain("HomeWiFiSecret", tagText);
     }
 
     [Fact]

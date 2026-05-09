@@ -10,4 +10,8 @@
     <PackageReference Include="Microsoft.Extensions.AI" Version="10.5.2" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\AIAPP.Observability\AIAPP.Observability.csproj" />
+  </ItemGroup>
+
 </Project>

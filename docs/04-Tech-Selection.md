@@ -77,6 +77,88 @@ Android 最低版本：Android 12+。
 - RabbitMQ + MassTransit 用于服务之间发送事件，避免服务强耦合。
 - OpenTelemetry 用于日志、指标和链路追踪，方便排查问题。
 
+## 工程规范体系
+
+选型：
+
+- 中文规范文档：放在 `docs/engineering-standards/`。
+- 模板：放在 `docs/templates/`。
+- 门禁脚本：放在 `scripts/`。
+- 服务端可观测性共享类库：`AIAPP.Observability`。
+
+初学者解释：
+
+- 工程规范体系就是项目自己的“开发规则说明书”和“自动检查工具”。
+- 它帮助 AI 和工程师按同一套标准写代码。
+- 它能提前发现文档缺失、隐私日志风险、可观测性缺失。
+
+为什么不用泛称 `tools`：
+
+- `tools` 容易被理解成某个命令行工具或插件。
+- 本项目需要的是覆盖文档、代码、日志、Trace、Metric、Alert 的完整规范。
+- “工程规范体系”更准确。
+
+## 可观测性和预警
+
+服务端全链路日志、可观测性和预警统一采用 OpenTelemetry 方案。
+
+默认组合：
+
+- OpenTelemetry Collector：统一汇聚。
+- Prometheus：指标。
+- Grafana：看板。
+- Loki：日志。
+- Tempo：链路追踪。
+- Alertmanager：预警。
+
+核心字段：
+
+- `correlation_id`：串起一次用户操作。
+- `trace_id`：串起一次链路追踪。
+- `span_id`：标识链路中的某一步。
+- `operation`：操作名。
+- `result`：成功或失败。
+- `error_code`：错误码。
+- `duration_ms`：耗时。
+
+为什么不直接绑定商业 APM：
+
+- 首版需要云无关，避免被单一供应商锁死。
+- OpenTelemetry 是开放标准，后续可以接入不同厂商。
+- 隐私过滤规则可以先在项目内部统一控制。
+
+## 部署与 CI/CD
+
+选型：
+
+- 容器编排：Kubernetes。
+- 配置组织：kustomize。
+- CI/CD：GitHub Actions。
+- 基础组件：PostgreSQL + PostGIS、Redis、RabbitMQ、MinIO。
+- 可观测性组件：OpenTelemetry Collector、Prometheus、Grafana、Loki、Tempo、Alertmanager。
+
+初学者解释：
+
+- Kubernetes 负责把服务和数据库等组件运行在服务器集群里。
+- kustomize 用来把多个 Kubernetes 配置组合成一个部署入口。
+- GitHub Actions 用来在提交代码后自动运行检查，也可以手动触发部署。
+- PostgreSQL 保存核心数据。
+- Redis 保存短期状态和缓存。
+- RabbitMQ 负责服务之间传事件。
+- MinIO 是 S3 兼容对象存储，适合本地和自建环境。
+
+为什么首版不用 Helm：
+
+- Helm 功能强，但模板层会增加初学者理解成本。
+- 现在业务服务还没全部实现，纯 Kubernetes YAML 更直接。
+- 后续组件复杂后可以再引入 Helm，并通过 ADR 记录。
+
+为什么 CD 先用手动触发：
+
+- 生产部署风险高，需要人工确认环境。
+- kubeconfig 和云厂商密钥都是高敏感信息。
+- 首版先保证 CI 检查稳定，再逐步自动化发布。
+
 为什么不用一个巨大的单体：
 
 - 单体前期简单，但账号、授权、定位、聊天、AI、推送都属于不同边界，后期会互相影响。
