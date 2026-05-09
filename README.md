@@ -22,4 +22,4 @@ dotnet test AIAPP.slnx -c Release --no-build
 powershell -ExecutionPolicy Bypass -File scripts/Assert-DocsGate.ps1
 ```
 
-修改任何产品行为前，必须先阅读 `docs/00-AI-Project-Handbook.md`。项目文档是唯一事实源，代码必须服从文档。
+修改任何产品行为前，必须先阅读 `docs/00-AI-Project-Handbook.md`。如果你是初学者，先读 `docs/09-Beginner-Guide.md`。项目文档是唯一事实源，代码必须服从文档。

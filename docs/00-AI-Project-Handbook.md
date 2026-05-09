@@ -22,6 +22,7 @@ related_adr:
 - [[06-Android-Client-Design]]
 - [[07-Server-Design]]
 - [[08-Launch-And-Compliance]]
+- [[09-Beginner-Guide]]
 - [[features/ai-privacy-analysis]]
 - [[adr/0001-ai-privacy-gateway]]
 
@@ -39,6 +40,18 @@ related_adr:
 - 官方术语原名
 
 如果文档里必须出现英文术语，应尽量加中文解释。
+
+## 初学者阅读顺序
+
+如果你刚接触这个项目，按下面顺序读：
+
+1. [[09-Beginner-Guide]]：先理解项目、目录、技术栈和常见词。
+2. [[01-Product-Vision]]：理解这个 App 要解决什么问题、不做什么。
+3. [[05-Feature-Map]]：理解首版有哪些功能，功能之间有什么依赖。
+4. [[03-Permissions-And-Privacy]]：理解为什么权限和隐私是本项目的核心。
+5. [[02-Architecture]]：理解客户端、服务端、数据库、AI、第三方服务怎样协作。
+6. [[04-Tech-Selection]]：理解为什么选这些技术，为什么暂时不用某些技术。
+7. 具体功能文档：改哪个功能就读 `docs/features/` 下对应文件。
 
 ## AI 技术边界
 

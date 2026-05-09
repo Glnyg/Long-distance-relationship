@@ -14,6 +14,7 @@ $requiredFiles = @(
     'docs/06-Android-Client-Design.md',
     'docs/07-Server-Design.md',
     'docs/08-Launch-And-Compliance.md',
+    'docs/09-Beginner-Guide.md',
     'docs/features/account-and-binding.md',
     'docs/features/consent-center.md',
     'docs/features/ai-privacy-analysis.md',
@@ -24,6 +25,7 @@ $requiredFiles = @(
     'docs/features/notifications.md',
     'docs/adr/0001-ai-privacy-gateway.md',
     'docs/changes/2026-05-09-ai-privacy-gateway.md',
+    'docs/changes/2026-05-09-beginner-guide.md',
     'docs/templates/功能文档模板.md'
 )
 
@@ -48,6 +50,11 @@ $requiredPhrases = @(
     '文档是唯一事实源',
     'Android 原生 Kotlin',
     '.NET 10',
+    '初学者导读',
+    '8 条业务主线',
+    '模块关系',
+    '服务关系',
+    '第三方服务',
     'Microsoft.Extensions.AI',
     'IChatClient',
     '不上 MAF',
