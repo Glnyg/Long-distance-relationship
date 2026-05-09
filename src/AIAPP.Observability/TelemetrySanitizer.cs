@@ -5,8 +5,12 @@ using System.Text.RegularExpressions;
 
 namespace AIAPP.Observability;
 
+/// <summary>
+/// 遥测脱敏工具。任何可能进入日志、Trace、Metric 的用户标识或文本，都应该先经过这里。
+/// </summary>
 public sealed class TelemetrySanitizer
 {
+    // 这些正则只做兜底脱敏，不能替代业务层“不要记录隐私原文”的规则。
     private static readonly Regex EmailPattern = new(
         @"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
@@ -48,6 +52,7 @@ public sealed class TelemetrySanitizer
         sanitized = LongNumberPattern.Replace(sanitized, "[number]");
         sanitized = SecretAssignmentPattern.Replace(sanitized, "$1=[redacted]");
 
+        // 长文本通常更容易带入隐私细节，所以进入遥测前统一截断。
         if (sanitized.Length <= maxLength)
         {
             return sanitized;
@@ -76,6 +81,7 @@ public sealed class TelemetrySanitizer
 
         if (IsSensitiveKey(key))
         {
+            // 只要字段名看起来像敏感字段，就不尝试保留原值。
             return "[redacted]";
         }
 
@@ -96,6 +102,7 @@ public sealed class TelemetrySanitizer
 
     public static string HashIdentifier(string value)
     {
+        // 哈希后只取前 16 位，足够排障关联，又不会暴露原始用户 ID。
         var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(value));
         return Convert.ToHexString(bytes)[..16].ToLowerInvariant();
     }

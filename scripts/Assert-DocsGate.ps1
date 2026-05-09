@@ -4,7 +4,9 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# 文档是唯一事实源，所以这里列出项目必须存在的核心文档。
 $requiredFiles = @(
+    'AGENTS.md',
     'docs/00-AI-Project-Handbook.md',
     'docs/01-Product-Vision.md',
     'docs/02-Architecture.md',
@@ -58,6 +60,7 @@ $combinedDocs = $requiredFiles |
     ForEach-Object { Get-Content -LiteralPath (Join-Path $Root $_) -Raw } |
     Out-String
 
+# 这些词代表当前项目的关键决策。缺少时通常说明文档没有同步更新。
 $requiredPhrases = @(
     '中文为主',
     '文档是唯一事实源',
@@ -109,6 +112,7 @@ $projectFiles = Get-ChildItem -LiteralPath $Root -Recurse -Filter '*.csproj' |
 
 foreach ($projectFile in $projectFiles) {
     $content = Get-Content -LiteralPath $projectFile.FullName -Raw
+    # 首版明确不上 MAF，因此任何 Microsoft.Agents.AI 包引用都直接失败。
     if ($content -match 'Microsoft\.Agents\.AI') {
         throw "MAF package reference is not allowed in v1: $($projectFile.FullName)"
     }

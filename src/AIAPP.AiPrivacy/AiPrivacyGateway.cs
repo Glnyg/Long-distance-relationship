@@ -11,6 +11,7 @@ namespace AIAPP.AiPrivacy;
 
 public sealed class AiPrivacyGateway
 {
+    // AI 相关 Trace 统一使用这个 Source。注意：Trace 里只能放元数据，不能放 prompt 或隐私原文。
     private static readonly ActivitySource ActivitySource = new(AiAppTelemetryNames.ActivitySources.AiPrivacy);
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
@@ -46,6 +47,7 @@ public sealed class AiPrivacyGateway
 
     public async Task<AiAnalysisOutcome> AnalyzeAsync(AiAnalysisRequest request, CancellationToken cancellationToken = default)
     {
+        // 一个 AnalyzeAsync 对应一次用户主动触发的 AI 分析，后续子步骤都会挂在这条 Trace 下。
         using var analysisActivity = StartActivity("ai_privacy.analyze");
         var now = _timeProvider.GetUtcNow();
         var toUtc = request.ToUtc ?? now;
@@ -111,6 +113,7 @@ public sealed class AiPrivacyGateway
         using (var promptActivity = StartActivity("ai_privacy.build_prompt"))
         {
             SetRequestTags(promptActivity, request, fromUtc, toUtc);
+            // prompt 只在内存里使用，不能写入日志、Trace、审计或数据库。
             prompt = await BuildPromptAsync(binding, request, fromUtc, toUtc, cancellationToken).ConfigureAwait(false);
             promptActivity?.SetTag(AiAppTelemetryNames.Tags.Result, "ok");
         }
@@ -126,6 +129,7 @@ public sealed class AiPrivacyGateway
         ChatResponse response;
         using var modelActivity = StartActivity("ai_privacy.model_call", ActivityKind.Client);
         SetRequestTags(modelActivity, request, fromUtc, toUtc);
+        // 这里只记录模型 ID，不记录模型输入内容。
         modelActivity?.SetTag(AiAppTelemetryNames.Tags.ModelId, _options.ModelId);
         try
         {
@@ -259,6 +263,7 @@ public sealed class AiPrivacyGateway
         DateTimeOffset toUtc,
         CancellationToken cancellationToken)
     {
+        // 这里构造模型输入，但调用方不会保存返回的 prompt。后续改动必须继续遵守“输入不落库”。
         var builder = new StringBuilder();
         builder.AppendLine("You are analyzing a consenting adult couple's shared private data.");
         builder.AppendLine("Return strict JSON with: summary, suggestions, safetyLabel.");
@@ -311,6 +316,7 @@ public sealed class AiPrivacyGateway
     private static void AppendChatSection(StringBuilder builder, CoupleBinding binding, IReadOnlyList<PrivateChatMessage> messages)
     {
         builder.AppendLine("ChatMessages:");
+        // 最多取最近 100 条，避免把过多聊天内容放进单次模型请求。
         foreach (var message in messages.OrderBy(static message => message.SentAtUtc).TakeLast(100))
         {
             builder.Append(CultureInfo.InvariantCulture, $"- {message.SentAtUtc:O} ");
@@ -324,6 +330,7 @@ public sealed class AiPrivacyGateway
     {
         builder.AppendLine("LocationSummary:");
         builder.AppendLine(CultureInfo.InvariantCulture, $"- pointCount: {points.Count}");
+        // 只给模型区域摘要，不给精确经纬度，降低位置隐私暴露。
         var areas = points
             .Select(static point => point.AreaLabel)
             .Where(static label => !string.IsNullOrWhiteSpace(label))
@@ -348,6 +355,7 @@ public sealed class AiPrivacyGateway
         builder.AppendLine(CultureInfo.InvariantCulture, $"- averageBatteryPercent: {states.Average(static state => state.BatteryPercent):F1}");
         builder.AppendLine(CultureInfo.InvariantCulture, $"- totalScreenOnMinutes: {states.Sum(static state => state.ScreenOnMinutes)}");
         builder.AppendLine(CultureInfo.InvariantCulture, $"- chargingSampleCount: {states.Count(static state => state.IsCharging)}");
+        // 不输出 Wi-Fi 名称，只告诉模型“有网络连接样本”。
         builder.AppendLine(CultureInfo.InvariantCulture, $"- hasNetworkConnectionSamples: {states.Any(static state => !string.IsNullOrWhiteSpace(state.ActiveNetworkName))}");
     }
 
@@ -457,6 +465,7 @@ public sealed class AiPrivacyGateway
         DateTimeOffset fromUtc,
         DateTimeOffset toUtc)
     {
+        // Trace 需要能关联问题，但不能暴露原始 userId/coupleId，所以统一写哈希值。
         activity?.SetTag(AiAppTelemetryNames.Tags.CoupleIdHash, TelemetrySanitizer.HashIdentifier(request.CoupleId));
         activity?.SetTag(AiAppTelemetryNames.Tags.UserIdHash, TelemetrySanitizer.HashIdentifier(request.RequestedByUserId));
         activity?.SetTag(AiAppTelemetryNames.Tags.DataType, request.DataTypes.ToString());

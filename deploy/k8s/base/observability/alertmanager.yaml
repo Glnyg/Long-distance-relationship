@@ -8,6 +8,7 @@ metadata:
     app.kubernetes.io/part-of: aiapp
 data:
   alertmanager.yml: |
+    # 首版只保留默认 receiver，后续可接入短信、邮件、企业微信或飞书。
     route:
       receiver: default
       group_wait: 30s
@@ -27,6 +28,7 @@ metadata:
 spec:
   ports:
     - name: http
+      # Prometheus 会把触发的预警发送到这个端口。
       port: 9093
       targetPort: http
   selector:

@@ -2,9 +2,15 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
+  # OpenTelemetry Collector 是服务端日志、Trace、Metric 的统一入口。
   - otel-collector.yaml
+  # Prometheus 负责保存指标并触发基础预警规则。
   - prometheus.yaml
+  # Alertmanager 负责接收 Prometheus 预警，后续再接短信、邮件或 IM。
   - alertmanager.yaml
+  # Grafana 展示指标、日志和链路追踪看板。
   - grafana.yaml
+  # Loki 保存日志。
   - loki.yaml
+  # Tempo 保存 Trace。
   - tempo.yaml

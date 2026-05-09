@@ -7,6 +7,7 @@ metadata:
     app.kubernetes.io/name: redis
     app.kubernetes.io/part-of: aiapp
 spec:
+  # Redis 保存会话、在线状态、限流和短期缓存；不能作为唯一长期数据源。
   serviceName: aiapp-redis
   replicas: 1
   selector:
@@ -31,10 +32,12 @@ spec:
             - secretRef:
                 name: aiapp-redis-secret
           command:
+            # 开启 AOF，让 Redis 重启时尽量恢复最近写入的数据。
             - redis-server
             - --appendonly
             - "yes"
             - --requirepass
+            # 密码从 Secret 注入，避免硬编码。
             - "$(REDIS_PASSWORD)"
           readinessProbe:
             exec:
@@ -61,6 +64,7 @@ spec:
               memory: 512Mi
           volumeMounts:
             - name: redis-data
+              # AOF 文件写入 /data，需要持久卷保存。
               mountPath: /data
   volumeClaimTemplates:
     - metadata:

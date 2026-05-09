@@ -8,11 +8,13 @@ metadata:
     app.kubernetes.io/part-of: aiapp
 data:
   tempo.yml: |
+    # Tempo 保存 Trace，帮助按一次用户操作排查跨服务链路。
     server:
       http_listen_port: 3200
     distributor:
       receivers:
         otlp:
+          # Collector 会通过 OTLP 把 Trace 转发到这里。
           protocols:
             grpc:
               endpoint: 0.0.0.0:4317
@@ -20,6 +22,7 @@ data:
               endpoint: 0.0.0.0:4318
     storage:
       trace:
+        # 首版用本地存储，生产环境建议换对象存储。
         backend: local
         local:
           path: /tempo/traces
@@ -38,9 +41,11 @@ metadata:
 spec:
   ports:
     - name: http
+      # Grafana 通过 aiapp-tempo:3200 查询 Trace。
       port: 3200
       targetPort: http
     - name: otlp-grpc
+      # Collector 向 Tempo 写入 Trace 的 gRPC 入口。
       port: 4317
       targetPort: otlp-grpc
     - name: otlp-http
@@ -101,6 +106,7 @@ spec:
             - name: config
               mountPath: /etc/tempo
             - name: data
+              # emptyDir 适合开发环境；生产 Trace 应使用持久化存储。
               mountPath: /tempo
       volumes:
         - name: config

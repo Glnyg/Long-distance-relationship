@@ -9,9 +9,11 @@ metadata:
 spec:
   ports:
     - name: api
+      # 业务服务通过 S3 API 端口读写图片、语音等对象。
       port: 9000
       targetPort: api
     - name: console
+      # 控制台端口用于管理，生产环境应限制访问来源。
       port: 9001
       targetPort: console
   selector:

@@ -4,6 +4,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# 可观测性不是可选项，缺少规范文档或共享类库时直接失败。
 $requiredDocs = @(
     'docs/engineering-standards/代码生成总规则.md',
     'docs/engineering-standards/服务端工程规范.md',
@@ -31,6 +32,8 @@ if (-not (Test-Path -LiteralPath $observabilityProject)) {
 }
 
 $observabilityProjectContent = Get-Content -LiteralPath $observabilityProject -Raw
+
+# 这些包分别负责 OpenTelemetry 托管集成、HTTP 自动埋点和 OTLP 导出。
 $requiredPackages = @(
     'OpenTelemetry.Extensions.Hosting',
     'OpenTelemetry.Instrumentation.AspNetCore',
@@ -87,6 +90,7 @@ foreach ($webProject in $webProjects) {
 
     $programContent = Get-Content -LiteralPath $programFile -Raw
     $missingCalls = @()
+    # 每个 Web 服务都必须接入统一观测入口、关联 ID 和健康检查。
     if ($programContent -notlike '*AddAiAppObservability*') {
         $missingCalls += 'AddAiAppObservability'
     }

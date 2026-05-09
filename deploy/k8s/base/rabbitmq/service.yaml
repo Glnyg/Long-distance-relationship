@@ -9,9 +9,11 @@ metadata:
 spec:
   ports:
     - name: amqp
+      # 业务服务通过 AMQP 端口发布和消费事件。
       port: 5672
       targetPort: amqp
     - name: management
+      # 管理端口只建议内网访问，不应直接暴露公网。
       port: 15672
       targetPort: management
   selector:

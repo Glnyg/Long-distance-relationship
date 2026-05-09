@@ -7,6 +7,7 @@ metadata:
     app.kubernetes.io/name: minio
     app.kubernetes.io/part-of: aiapp
 spec:
+  # MinIO 存放头像、图片、语音等文件对象，需要持久卷。
   serviceName: aiapp-minio
   replicas: 1
   selector:
@@ -26,6 +27,7 @@ spec:
           imagePullPolicy: IfNotPresent
           args:
             - server
+            # /data 是对象数据目录，挂载到持久卷。
             - /data
             - --console-address
             - :9001
@@ -58,6 +60,7 @@ spec:
               memory: 1Gi
           volumeMounts:
             - name: minio-data
+              # 对象文件不能随 Pod 删除而丢失。
               mountPath: /data
   volumeClaimTemplates:
     - metadata:

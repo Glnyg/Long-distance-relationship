@@ -1,9 +1,11 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
+# 这是 Kubernetes 基础设施的总入口；kubectl apply -k deploy/k8s/base 会从这里开始部署。
 resources:
   - namespace.yaml
   - service-account.yaml
+  # 数据库、缓存、消息队列、对象存储和可观测性组件分目录维护，方便后续替换。
   - postgres/
   - redis/
   - rabbitmq/

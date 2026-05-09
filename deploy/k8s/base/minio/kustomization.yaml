@@ -2,6 +2,7 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
+  # MinIO 是 S3 兼容对象存储，适合本地和自建环境。
   - secret.example.yaml
   - service.yaml
   - statefulset.yaml

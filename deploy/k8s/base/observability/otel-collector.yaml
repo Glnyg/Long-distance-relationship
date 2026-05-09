@@ -10,6 +10,7 @@ data:
   otel-collector.yaml: |
     receivers:
       otlp:
+        # 服务端 AIAPP.Observability 默认通过 OTLP 把日志、Trace、Metric 发到这里。
         protocols:
           grpc:
             endpoint: 0.0.0.0:4317
@@ -18,8 +19,10 @@ data:
 
     processors:
       batch:
+        # batch 会把遥测数据合并后再导出，减少网络开销。
         timeout: 5s
       memory_limiter:
+        # 防止 Collector 内存失控影响节点。
         check_interval: 1s
         limit_mib: 384
 
@@ -29,12 +32,15 @@ data:
 
     exporters:
       prometheus:
+        # Prometheus 会抓取这个端口上的指标。
         endpoint: 0.0.0.0:9464
       otlp/tempo:
+        # Trace 转发到 Tempo，用于按 correlation_id 排查链路。
         endpoint: aiapp-tempo:4317
         tls:
           insecure: true
       debug:
+        # 首版保留 debug exporter 便于本地排障；生产环境可按需要关闭。
         verbosity: basic
 
     service:
@@ -51,6 +57,7 @@ data:
         logs:
           receivers: [otlp]
           processors: [memory_limiter, batch]
+          # 首版日志先走 debug；接入 Loki exporter 前仍要保证日志内容已脱敏。
           exporters: [debug]
 ---
 apiVersion: v1
@@ -64,9 +71,11 @@ metadata:
 spec:
   ports:
     - name: otlp-grpc
+      # gRPC OTLP，.NET 默认常用端口。
       port: 4317
       targetPort: otlp-grpc
     - name: otlp-http
+      # HTTP OTLP，便于其他客户端或代理接入。
       port: 4318
       targetPort: otlp-http
     - name: metrics
@@ -127,6 +136,7 @@ spec:
               memory: 512Mi
           volumeMounts:
             - name: config
+              # ConfigMap 挂载成 Collector 配置文件。
               mountPath: /etc/otelcol
       volumes:
         - name: config

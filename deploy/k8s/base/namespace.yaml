@@ -3,5 +3,6 @@ kind: Namespace
 metadata:
   name: aiapp
   labels:
+    # 统一标签方便 kubectl、Grafana、Prometheus 按项目筛选资源。
     app.kubernetes.io/name: aiapp
     app.kubernetes.io/part-of: aiapp

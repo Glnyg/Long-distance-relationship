@@ -10,6 +10,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# 功能名用于文件路径，统一 kebab-case 可以避免 Windows、Linux 和 Obsidian 链接差异。
 if ($Name -notmatch '^[a-z0-9]+(-[a-z0-9]+)*$') {
     throw 'Name must use lowercase kebab-case, for example: ai-result-delete.'
 }
@@ -21,11 +22,13 @@ $checklistsDir = Join-Path $Root 'docs/checklists'
 
 New-Item -ItemType Directory -Force -Path $featuresDir, $changesDir, $checklistsDir | Out-Null
 
+# 一个新功能至少要同时生成：功能文档、变更记录、可观测性检查清单。
 $featurePath = Join-Path $featuresDir "$Name.md"
 $changePath = Join-Path $changesDir "$date-$Name.md"
 $checklistPath = Join-Path $checklistsDir "$date-$Name-可观测性检查清单.md"
 
 foreach ($path in @($featurePath, $changePath, $checklistPath)) {
+    # 不覆盖已有文件，避免误删用户已经写好的设计内容。
     if (Test-Path -LiteralPath $path) {
         throw "File already exists: $path"
     }

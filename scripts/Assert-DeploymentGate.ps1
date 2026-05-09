@@ -4,6 +4,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# 部署门禁只检查“部署骨架是否完整”，不会连接生产环境，也不会读取真实 Secret。
 $requiredFiles = @(
     'deploy/k8s/README.md',
     'deploy/k8s/base/kustomization.yaml',
@@ -51,6 +52,8 @@ if ($missingFiles.Count -gt 0) {
 }
 
 $kustomization = Get-Content -LiteralPath (Join-Path $Root 'deploy/k8s/base/kustomization.yaml') -Raw
+
+# base 入口必须包含项目首版依赖的基础组件。
 $requiredKustomizeEntries = @(
     'postgres/',
     'redis/',
@@ -106,6 +109,7 @@ $secretFiles = Get-ChildItem -LiteralPath (Join-Path $Root 'deploy/k8s') -Recurs
 
 foreach ($secretFile in $secretFiles) {
     $content = Get-Content -LiteralPath $secretFile.FullName -Raw
+    # 仓库里只能放示例 Secret，真实密码必须由环境或密钥系统注入。
     if ($content -notlike '*CHANGE_ME*') {
         throw "Deployment gate failed. Secret example must use CHANGE_ME placeholder: $($secretFile.FullName)"
     }
@@ -123,6 +127,7 @@ if ($workflowDeploy -notlike '*kubectl apply -k*' -or $workflowDeploy -notlike '
 
 $kubectl = Get-Command kubectl -ErrorAction SilentlyContinue
 if ($kubectl) {
+    # kubectl kustomize 是离线渲染，不需要本机连接 Kubernetes 集群。
     kubectl kustomize (Join-Path $Root 'deploy/k8s/base') | Out-Null
     if ($LASTEXITCODE -ne 0) {
         throw 'Deployment gate failed. kubectl kustomize failed.'

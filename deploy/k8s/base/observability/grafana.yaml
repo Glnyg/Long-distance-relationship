@@ -8,6 +8,7 @@ metadata:
     app.kubernetes.io/part-of: aiapp
 type: Opaque
 stringData:
+  # 示例管理员密码，生产环境必须替换，并建议启用单点登录。
   GF_SECURITY_ADMIN_USER: admin
   GF_SECURITY_ADMIN_PASSWORD: CHANGE_ME_GRAFANA_PASSWORD
 ---
@@ -24,15 +25,18 @@ data:
     apiVersion: 1
     datasources:
       - name: Prometheus
+        # 默认数据源：用于看 API 延迟、错误率、AI 超时率等指标。
         type: prometheus
         access: proxy
         url: http://aiapp-prometheus:9090
         isDefault: true
       - name: Tempo
+        # Trace 数据源：用于按 trace_id 或 correlation_id 查链路。
         type: tempo
         access: proxy
         url: http://aiapp-tempo:3200
       - name: Loki
+        # 日志数据源：只应保存脱敏后的结构化日志。
         type: loki
         access: proxy
         url: http://aiapp-loki:3100
@@ -48,6 +52,7 @@ metadata:
 spec:
   ports:
     - name: http
+      # Grafana Web UI 默认端口。
       port: 3000
       targetPort: http
   selector:
@@ -100,6 +105,7 @@ spec:
               memory: 512Mi
           volumeMounts:
             - name: datasources
+              # 自动 provision 数据源，启动后不用手动在页面里添加。
               mountPath: /etc/grafana/provisioning/datasources
       volumes:
         - name: datasources

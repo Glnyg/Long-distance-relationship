@@ -7,6 +7,7 @@ metadata:
     app.kubernetes.io/name: postgres
     app.kubernetes.io/part-of: aiapp
 spec:
+  # StatefulSet 适合有状态组件；Pod 重建后会继续挂载原来的数据卷。
   serviceName: aiapp-postgres
   replicas: 1
   selector:
@@ -22,6 +23,7 @@ spec:
       serviceAccountName: aiapp-workload
       containers:
         - name: postgres
+          # postgis 镜像包含 PostgreSQL 和地理空间扩展，用来支撑位置轨迹查询。
           image: postgis/postgis:16-3.4
           imagePullPolicy: IfNotPresent
           ports:
@@ -29,8 +31,10 @@ spec:
               containerPort: 5432
           envFrom:
             - secretRef:
+                # 数据库名、用户名、密码都从 Secret 注入，不写在镜像或命令里。
                 name: aiapp-postgres-secret
           readinessProbe:
+            # readinessProbe 通过后，Kubernetes 才会把流量发给这个 Pod。
             exec:
               command:
                 - /bin/sh
@@ -39,6 +43,7 @@ spec:
             initialDelaySeconds: 10
             periodSeconds: 10
           livenessProbe:
+            # livenessProbe 失败时，Kubernetes 会尝试重启 Pod。
             exec:
               command:
                 - /bin/sh
@@ -55,6 +60,7 @@ spec:
               memory: 1Gi
           volumeMounts:
             - name: postgres-data
+              # 数据库文件必须放在持久卷里，Pod 重启不能丢数据。
               mountPath: /var/lib/postgresql/data
   volumeClaimTemplates:
     - metadata:
@@ -64,4 +70,5 @@ spec:
           - ReadWriteOnce
         resources:
           requests:
+            # 这里是首版保守资源，生产环境要按压测结果调整。
             storage: 20Gi

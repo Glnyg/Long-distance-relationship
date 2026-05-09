@@ -9,6 +9,7 @@ metadata:
 data:
   prometheus.yml: |
     global:
+      # 每 15 秒抓一次指标，首版足够排查 API、AI、推送等健康情况。
       scrape_interval: 15s
       evaluation_interval: 15s
 
@@ -27,6 +28,7 @@ data:
           - targets:
               - localhost:9090
       - job_name: otel-collector
+        # Collector 暴露 AIAPP 服务指标，Prometheus 从这里抓取。
         static_configs:
           - targets:
               - aiapp-otel-collector:9464
@@ -35,6 +37,7 @@ data:
       - name: aiapp-platform
         rules:
           - alert: AiAppTargetDown
+            # up == 0 表示某个抓取目标不可用。
             expr: up == 0
             for: 2m
             labels:
@@ -43,6 +46,7 @@ data:
               summary: AIAPP 有采集目标不可用
               description: 请先查看 Prometheus targets 和对应 Pod 状态。
           - alert: AiAppApiHighErrorRate
+            # 首版先做 5xx 基础预警，后续业务服务上线后再细化阈值。
             expr: sum(rate(http_server_request_duration_seconds_count{http_response_status_code=~"5.."}[5m])) > 0
             for: 5m
             labels:
@@ -62,6 +66,7 @@ metadata:
 spec:
   ports:
     - name: http
+      # Grafana 通过 aiapp-prometheus:9090 查询指标。
       port: 9090
       targetPort: http
   selector:
@@ -95,6 +100,7 @@ spec:
           imagePullPolicy: IfNotPresent
           args:
             - --config.file=/etc/prometheus/prometheus.yml
+            # 首版使用 Pod 内存储；生产环境应改成持久卷或托管 Prometheus。
             - --storage.tsdb.path=/prometheus
             - --web.enable-lifecycle
           ports:

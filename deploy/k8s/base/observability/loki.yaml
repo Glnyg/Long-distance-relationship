@@ -8,6 +8,7 @@ metadata:
     app.kubernetes.io/part-of: aiapp
 data:
   loki.yml: |
+    # Loki 保存日志。日志内容必须先在应用侧脱敏，不能依赖 Loki 再清洗。
     auth_enabled: false
     server:
       http_listen_port: 3100
@@ -15,6 +16,7 @@ data:
       path_prefix: /loki
       storage:
         filesystem:
+          # 首版用本地文件系统，生产环境建议换对象存储。
           chunks_directory: /loki/chunks
           rules_directory: /loki/rules
       replication_factor: 1
@@ -44,6 +46,7 @@ metadata:
 spec:
   ports:
     - name: http
+      # Grafana 通过 aiapp-loki:3100 查询日志。
       port: 3100
       targetPort: http
   selector:
@@ -97,6 +100,7 @@ spec:
             - name: config
               mountPath: /etc/loki
             - name: data
+              # emptyDir 适合开发环境；生产日志应使用持久化存储。
               mountPath: /loki
       volumes:
         - name: config

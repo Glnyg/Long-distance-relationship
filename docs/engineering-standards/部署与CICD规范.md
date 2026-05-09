@@ -54,6 +54,34 @@ deploy/k8s/base/kustomization.yaml
 
 不要把真实 Secret 提交到 Git。仓库中的 `secret.example.yaml` 只能放占位值。
 
+## 配置注释规则
+
+Kubernetes、CI/CD、Docker、监控和预警配置必须带必要中文注释，方便初学者理解。
+
+必须说明：
+
+- 这个组件是做什么的。
+- 这个端口给谁访问。
+- 这个 Secret 为什么不能提交真实值。
+- 这个持久卷保存什么数据，丢失会有什么影响。
+- 这个健康检查失败时 Kubernetes 会怎么处理。
+- 这个资源限制只是首版默认值还是生产推荐值。
+- 这个 CI/CD 步骤失败后应该优先看什么。
+
+不要在注释里写：
+
+- 真实数据库密码。
+- Redis 密码。
+- RabbitMQ 密码。
+- MinIO 密钥。
+- Grafana 密码。
+- kubeconfig 原文。
+- 云厂商 AK/SK。
+- 证书私钥。
+- 用户隐私数据。
+
+配置注释必须随着配置变更同步更新。配置已经改了但注释没改，会误导后续维护者。
+
 ## CI 规则
 
 CI 使用 GitHub Actions。

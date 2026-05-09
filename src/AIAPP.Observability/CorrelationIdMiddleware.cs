@@ -4,6 +4,9 @@ using Microsoft.Extensions.Logging;
 
 namespace AIAPP.Observability;
 
+/// <summary>
+/// 每个请求进入服务端时补齐 correlation_id，让日志和 Trace 能按一次用户操作串起来。
+/// </summary>
 public sealed class CorrelationIdMiddleware
 {
     private readonly RequestDelegate _next;
@@ -23,8 +26,10 @@ public sealed class CorrelationIdMiddleware
         context.Items[AiAppTelemetryNames.CorrelationIdItemName] = correlationId;
         context.Response.Headers[AiAppTelemetryNames.CorrelationIdHeaderName] = correlationId;
 
+        // Activity.Current 是当前 Trace span。把 correlation_id 放进去后，Tempo 里也能直接搜索。
         Activity.Current?.SetTag(AiAppTelemetryNames.Tags.CorrelationId, correlationId);
 
+        // BeginScope 会让本次请求内的 ILogger 日志自动带上 correlation_id。
         using var scope = _logger.BeginScope(new Dictionary<string, object>
         {
             [AiAppTelemetryNames.Tags.CorrelationId] = correlationId
@@ -39,6 +44,7 @@ public sealed class CorrelationIdMiddleware
             ? values.FirstOrDefault()
             : null;
 
+        // 客户端传来的 ID 合法就继续使用；不合法就丢弃，避免奇怪字符进入日志系统。
         if (IsValidCorrelationId(incoming))
         {
             return incoming!.Trim();

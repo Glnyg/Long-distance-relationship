@@ -9,6 +9,7 @@ metadata:
 spec:
   ports:
     - name: postgres
+      # 集群内部服务通过 aiapp-postgres:5432 访问数据库。
       port: 5432
       targetPort: postgres
   selector:

@@ -2,6 +2,7 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
+  # RabbitMQ 用于服务间事件，账号密码必须用 Secret 管理。
   - secret.example.yaml
   - service.yaml
   - statefulset.yaml

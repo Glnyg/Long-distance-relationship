@@ -7,6 +7,7 @@ metadata:
     app.kubernetes.io/name: rabbitmq
     app.kubernetes.io/part-of: aiapp
 spec:
+  # RabbitMQ 是有状态组件，消息队列数据需要挂载持久卷。
   serviceName: aiapp-rabbitmq
   replicas: 1
   selector:
@@ -22,6 +23,7 @@ spec:
       serviceAccountName: aiapp-workload
       containers:
         - name: rabbitmq
+          # management 镜像自带 Web 管理界面，方便开发和排障。
           image: rabbitmq:3.13-management-alpine
           imagePullPolicy: IfNotPresent
           ports:
@@ -33,6 +35,7 @@ spec:
             - secretRef:
                 name: aiapp-rabbitmq-secret
           readinessProbe:
+            # rabbitmq-diagnostics ping 能确认节点已经启动并可接受连接。
             exec:
               command:
                 - rabbitmq-diagnostics
@@ -55,6 +58,7 @@ spec:
               memory: 1Gi
           volumeMounts:
             - name: rabbitmq-data
+              # 队列元数据和持久化消息存放在这里。
               mountPath: /var/lib/rabbitmq
   volumeClaimTemplates:
     - metadata:

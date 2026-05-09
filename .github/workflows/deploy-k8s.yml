@@ -1,9 +1,11 @@
 name: Deploy Kubernetes
 
 on:
+  # 生产部署先用手动触发，避免 push 后自动改动真实环境。
   workflow_dispatch:
     inputs:
       environment:
+        # GitHub environment 可以绑定审批、密钥和环境保护规则。
         description: 部署环境名称
         required: true
         default: dev
@@ -13,6 +15,7 @@ on:
           - staging
           - production
       kustomize_path:
+        # 默认部署基础设施。后续可传入 overlays/dev、overlays/production。
         description: kustomize 目录
         required: true
         default: deploy/k8s/base
@@ -34,15 +37,18 @@ jobs:
         shell: bash
         run: |
           mkdir -p "$HOME/.kube"
+          # KUBE_CONFIG_B64 是 GitHub Secret，不能把 kubeconfig 原文提交到仓库。
           echo "${KUBE_CONFIG_B64}" | base64 -d > "$HOME/.kube/config"
           chmod 600 "$HOME/.kube/config"
         env:
           KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG_B64 }}
 
       - name: Client dry-run
+        # 先让 kubectl 做一次客户端预检查，通过后才真正 apply。
         shell: bash
         run: kubectl apply --dry-run=client -k "${{ inputs.kustomize_path }}"
 
       - name: Deploy
+        # kustomize 入口会递归应用 deploy/k8s/base 下的所有组件。
         shell: bash
         run: kubectl apply -k "${{ inputs.kustomize_path }}"

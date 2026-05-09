@@ -9,6 +9,7 @@ metadata:
 spec:
   ports:
     - name: redis
+      # 集群内部服务通过 aiapp-redis:6379 访问 Redis。
       port: 6379
       targetPort: redis
   selector:
